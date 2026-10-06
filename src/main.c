@@ -1,10 +1,19 @@
-#include <stdio.h> 
-#include <stdlib.h> 
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
 #include <readline/history.h>
 #include <readline/readline.h>
-#include "history.h"
 
+#include "history.h"
+#include "token.h"
+#include "lexer.h"
+#include "parser.h"
+#include "expand.h"
+#include "builtin.h"
+#include "executor.h"
+#include "jobs.h"
+#include "job_control.h"
 
 int main(void)
 {
@@ -14,14 +23,27 @@ int main(void)
     printf(" A Unix Style Shell written in C\n");
     printf("=====================================\n");
 
-// Initializing History 
- using_history(); 
+    /* =============================================
+       INITIALIZE JOB CONTROL
+       ============================================= */
 
- char *line;
+    jobs_init();
+
+    job_control_init();
+
+    setup_background_handler();
+
+    using_history();
+
+    token_list_t tokens;
+    pipeline_t pipeline;
+
+    char *line;
 
     while (1)
     {
         line = readline("shellforge$ ");
+
         if (line == NULL)
         {
             printf("\nGoodbye!\n");
@@ -34,23 +56,49 @@ int main(void)
             continue;
         }
 
-       if (strcmp(line, "history") == 0)
-       {
-        print_history();
-        free(line);
-        continue;
-       }
-    // adding the input line to history 
+        if (strcmp(line, "history") == 0)
+        {
+            print_history();
+
+            free(line);
+
+            continue;
+        }
+
+        // milestone 1 - enabling history
+
         add_history(line);
-       printf(" YOU ENTERED : %s\n", line); 
-  
-        if (strcmp(line, "exit") == 0)
+
+        // milestone 2.1 - tokenization and lexer
+
+        lexer(line, &tokens);
+
+        // token_print(&tokens);
+
+        // milestone 2.2 - expansion of environment variables and parser
+
+        if (parser(&tokens, &pipeline))
+        {
+            expand_variables(&pipeline);
+
+            // pipeline_print(&pipeline);
+        }
+
+        if (pipeline.command_count == 1 &&
+            pipeline.commands[0].argc > 0 &&
+            strcmp(
+                pipeline.commands[0].argv[0],
+                "exit"
+            ) == 0)
         {
             free(line);
-            printf("Exiting...\n");
             break;
         }
-  free(line);
-    }    
+
+        execute_pipeline(&pipeline);
+
+        free(line);
+    }
+
     return 0;
 }
